@@ -6,10 +6,17 @@
 ## Устройство
 
 - `web/index.html` — вся страница (HTML, CSS, JS в одном файле).
-- `netlify/functions/api.mts` — API `/api/*`, данные в Netlify Blobs (store `komunal-calendar`).
+- `netlify/functions/api.mts` — API `/api/*` для страницы, данные в Netlify Blobs (store `komunal-calendar`).
+- `netlify/functions/mcp.mts` — MCP-коннектор `/mcp/<MCP_TOKEN>` для администратора броней
+  (claude.ai → Settings → Connectors → Add custom connector). Токен — переменная окружения
+  Netlify `MCP_TOKEN`; смена токена и redeploy отключают старую ссылку.
+- `netlify/lib/calendar.mts` — общий слой данных для обеих функций (валидация, пересечения, id).
 - `netlify.toml` — publish `web`, функции из `netlify/functions`.
 - Доступ к API — по PIN в заголовке `x-pin`. PIN хранится только в переменной
-  окружения Netlify `CALENDAR_PIN`. **Никогда не записывай PIN в репозиторий** — репозиторий публичный.
+  окружения Netlify `CALENDAR_PIN`. **Никогда не записывай PIN или `MCP_TOKEN` в репозиторий** —
+  репозиторий публичный.
+- Роли: владелец меняет вёрстку и бэкенд через репозиторий; администратор управляет бронями
+  через MCP-коннектор и страницу, доступа к репозиторию у него нет.
 
 ## Как менять страницу
 
