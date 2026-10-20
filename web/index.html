@@ -94,12 +94,13 @@ h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; text-
 .results .none { padding: 10px 12px; color: var(--muted); }
 
 /* notes of current and upcoming bookings, shown as reminder cards */
-.notices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.notice { flex: 0 1 360px; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--prepaid); background: var(--surface); border-radius: 8px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+/* a one-card-tall strip across the page; extra cards scroll vertically inside it */
+.notices { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); grid-auto-rows: 58px; gap: 8px; max-height: 58px; overflow-y: auto; overscroll-behavior: contain; flex: none; scrollbar-width: thin; }
+.notice { height: 58px; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--prepaid); background: var(--surface); border-radius: 8px; padding: 7px 12px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; }
 .notice:hover { background: var(--surface-2); }
 .notice.now { border-left-color: var(--accent); }
 .notice small { color: var(--muted); font-family: var(--font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notice span { font-weight: 500; overflow-wrap: anywhere; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.notice span { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hint { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); background: var(--surface); }
 .banner { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--fg); }
 
@@ -135,7 +136,7 @@ h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; text-
 body.lock { overflow: hidden; }
 .wrap.full { position: fixed; inset: 0; z-index: 15; max-width: none; margin: 0; gap: 8px; background: var(--bg);
   padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
-.wrap.full .top, .wrap.full .stats, .wrap.full .hint, .wrap.full .notices { display: none; }
+.wrap.full .top, .wrap.full .stats, .wrap.full .hint { display: none; }
 .wrap.full .only-full { display: inline-block; }
 .wrap.full .scroller { flex: 1; min-height: 0; max-height: none; }
 .tight .dh span { display: none; }
@@ -380,7 +381,8 @@ label textarea { min-height: 76px; resize: vertical; }
       .sort(function (a, b) { return a.checkin < b.checkin ? -1 : a.checkin > b.checkin ? 1 : 0; });
     box.innerHTML = list.map(function (b) {
       var now = isoToDn(b.checkin) <= t;
-      return '<button type="button" class="notice' + (now ? " now" : "") + '" data-id="' + esc(b.id) + '">' +
+      var tip = b.apt + " · " + b.guest + " · " + fmt(b.checkin) + " – " + fmt(b.checkout) + "\n" + String(b.notes).trim();
+      return '<button type="button" class="notice' + (now ? " now" : "") + '" data-id="' + esc(b.id) + '" title="' + esc(tip) + '">' +
         "<small>" + esc(b.apt) + " · " + esc(b.guest) + " · " + fmt(b.checkin) + " – " + fmt(b.checkout) + "</small>" +
         "<span>" + esc(String(b.notes).trim()) + "</span></button>";
     }).join("");
@@ -432,6 +434,7 @@ label textarea { min-height: 76px; resize: vertical; }
   }
 
   function render() {
+    renderNotices(); /* before fit(): the strip's height changes the space left for the timeline */
     fit();
     var y = view.y, m = view.m;
     var dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
@@ -467,7 +470,6 @@ label textarea { min-height: 76px; resize: vertical; }
     });
     $("tbl").innerHTML = h;
     renderStats();
-    renderNotices();
 
     if (!didScroll && y === now.getFullYear() && m === now.getMonth()) {
       var sc = $("scroller");
