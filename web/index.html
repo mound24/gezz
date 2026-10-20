@@ -249,7 +249,7 @@ label textarea { min-height: 76px; resize: vertical; }
           <option>Другое</option>
         </select>
       </label>
-      <label>Сумма за проживание
+      <label>Сумма за проживание (одни сутки)
         <input id="f-price" type="number" min="0" step="any" inputmode="decimal">
       </label>
       <label>Оплата
@@ -330,6 +330,7 @@ label textarea { min-height: 76px; resize: vertical; }
   function fmt(iso) { var p = String(iso).split("-"); return p[2] + "." + p[1]; }
   function todayDn() { var t = new Date(); return dn(t.getFullYear(), t.getMonth(), t.getDate()); }
   function nightsText(n) { var a = n % 10, b = n % 100; return n + " " + ((a === 1 && b !== 11) ? "ночь" : (a >= 2 && a <= 4 && (b < 10 || b >= 20)) ? "ночи" : "ночей"); }
+  function money(v) { return (Math.round(v * 100) / 100).toLocaleString("ru-RU"); }
   function payLabel(p) { return p === "paid" ? "Оплачено" : p === "prepaid" ? "Предоплата" : "Не оплачено"; }
 
   function showBanner(t) { var b = $("banner"); b.textContent = t; b.hidden = !t; }
@@ -461,7 +462,10 @@ label textarea { min-height: 76px; resize: vertical; }
   function updateCalc() {
     var ci = isoToDn($("f-in").value), co = isoToDn($("f-out").value);
     var n = $("f-nights"), w = $("clash");
-    if (!isNaN(ci) && !isNaN(co) && co > ci) n.textContent = nightsText(co - ci); else n.textContent = "";
+    var price = parseFloat($("f-price").value);
+    if (!isNaN(ci) && !isNaN(co) && co > ci) {
+      n.textContent = nightsText(co - ci) + (isNaN(price) ? "" : " · итого " + money(price * (co - ci)));
+    } else n.textContent = "";
     var apt = $("f-apt").value, found = [];
     if (!isNaN(ci) && !isNaN(co) && co > ci) {
       bookings.forEach(function (b) {
@@ -615,7 +619,7 @@ label textarea { min-height: 76px; resize: vertical; }
   $("form").addEventListener("submit", saveForm);
   $("cancel").addEventListener("click", closeForm);
   $("del").addEventListener("click", deleteBooking);
-  ["f-in", "f-out", "f-apt"].forEach(function (id) { $(id).addEventListener("input", updateCalc); });
+  ["f-in", "f-out", "f-apt", "f-price"].forEach(function (id) { $(id).addEventListener("input", updateCalc); });
   $("f-in").addEventListener("change", function () {
     var ci = isoToDn($("f-in").value), co = isoToDn($("f-out").value);
     if (!isNaN(ci) && (isNaN(co) || co <= ci)) { $("f-out").value = dnToIso(ci + 1); }
