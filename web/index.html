@@ -292,7 +292,7 @@ label textarea { min-height: 76px; resize: vertical; }
   <form class="panel" id="pinForm" novalidate style="max-width:380px">
     <h2>Вход в календарь</h2>
     <label>PIN-код
-      <input id="p-pin" type="password" autocomplete="current-password" inputmode="text">
+      <input id="p-pin" type="password" autocomplete="current-password" inputmode="numeric" autocapitalize="off" autocorrect="off" spellcheck="false">
     </label>
     <p class="err" id="perr" hidden></p>
     <div class="formbtns">
@@ -705,7 +705,7 @@ label textarea { min-height: 76px; resize: vertical; }
 
   $("pinForm").addEventListener("submit", function (e) {
     e.preventDefault();
-    var v = $("p-pin").value.trim();
+    var v = $("p-pin").value.replace(/\s+/g, "");
     if (!v) { $("perr").textContent = "Введите PIN-код."; $("perr").hidden = false; return; }
     pin = v;
     try { localStorage.setItem(PIN_KEY, pin); } catch (err) {}

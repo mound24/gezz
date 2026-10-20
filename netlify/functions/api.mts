@@ -11,8 +11,8 @@ function store() {
 }
 
 function authorized(req: Request): boolean {
-  const expected = Netlify.env.get("CALENDAR_PIN") || ""
-  const given = req.headers.get("x-pin") || ""
+  const expected = (Netlify.env.get("CALENDAR_PIN") || "").trim()
+  const given = (req.headers.get("x-pin") || "").replace(/\s+/g, "")
   if (!expected) return false
   const a = Buffer.from(given)
   const b = Buffer.from(expected)
