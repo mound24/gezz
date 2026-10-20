@@ -93,6 +93,13 @@ h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; text-
 .results small { display: block; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
 .results .none { padding: 10px 12px; color: var(--muted); }
 
+/* notes of current and upcoming bookings, shown as reminder cards */
+.notices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.notice { flex: 0 1 360px; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--prepaid); background: var(--surface); border-radius: 8px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.notice:hover { background: var(--surface-2); }
+.notice.now { border-left-color: var(--accent); }
+.notice small { color: var(--muted); font-family: var(--font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice span { font-weight: 500; overflow-wrap: anywhere; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hint { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); background: var(--surface); }
 .banner { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--fg); }
 
@@ -128,7 +135,7 @@ h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; text-
 body.lock { overflow: hidden; }
 .wrap.full { position: fixed; inset: 0; z-index: 15; max-width: none; margin: 0; gap: 8px; background: var(--bg);
   padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
-.wrap.full .top, .wrap.full .stats, .wrap.full .hint { display: none; }
+.wrap.full .top, .wrap.full .stats, .wrap.full .hint, .wrap.full .notices { display: none; }
 .wrap.full .only-full { display: inline-block; }
 .wrap.full .scroller { flex: 1; min-height: 0; max-height: none; }
 .tight .dh span { display: none; }
@@ -205,6 +212,8 @@ label textarea { min-height: 76px; resize: vertical; }
     </div>
   </div>
 
+  <div class="notices" id="notices" hidden></div>
+
   <div class="legend">
     <span><i style="background:var(--paid)"></i>Оплачено</span>
     <span><i style="background:var(--prepaid)"></i>Предоплата</span>
@@ -246,6 +255,7 @@ label textarea { min-height: 76px; resize: vertical; }
           <option>Airbnb</option>
           <option>Напрямую</option>
           <option>Знакомые</option>
+          <option>Sutochno.ru</option>
           <option>Другое</option>
         </select>
       </label>
@@ -363,6 +373,20 @@ label textarea { min-height: 76px; resize: vertical; }
     $("sub").textContent = "Komunal · " + apts.length + " квартир. Заезды, выезды и данные жильцов";
   }
 
+  /* bookings that are still ahead or in progress and carry a note */
+  function renderNotices() {
+    var t = todayDn(), box = $("notices");
+    var list = bookings.filter(function (b) { return b.notes && String(b.notes).trim() && isoToDn(b.checkout) >= t; })
+      .sort(function (a, b) { return a.checkin < b.checkin ? -1 : a.checkin > b.checkin ? 1 : 0; });
+    box.innerHTML = list.map(function (b) {
+      var now = isoToDn(b.checkin) <= t;
+      return '<button type="button" class="notice' + (now ? " now" : "") + '" data-id="' + esc(b.id) + '">' +
+        "<small>" + esc(b.apt) + " · " + esc(b.guest) + " · " + fmt(b.checkin) + " – " + fmt(b.checkout) + "</small>" +
+        "<span>" + esc(String(b.notes).trim()) + "</span></button>";
+    }).join("");
+    box.hidden = !list.length;
+  }
+
   /* column width and row height: fixed normally, fitted to the screen in full-screen mode */
   function fit() {
     var dim = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
@@ -443,6 +467,7 @@ label textarea { min-height: 76px; resize: vertical; }
     });
     $("tbl").innerHTML = h;
     renderStats();
+    renderNotices();
 
     if (!didScroll && y === now.getFullYear() && m === now.getMonth()) {
       var sc = $("scroller");
@@ -602,6 +627,11 @@ label textarea { min-height: 76px; resize: vertical; }
     view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
     $("results").hidden = true; $("q").value = "";
     render(); openForm(b);
+  });
+  $("notices").addEventListener("click", function (e) {
+    var card = e.target.closest(".notice"); if (!card) return;
+    var b = bookings.filter(function (x) { return x.id === card.dataset.id; })[0];
+    if (b) openForm(b);
   });
   $("q").addEventListener("input", runSearch);
   document.addEventListener("click", function (e) { if (!e.target.closest(".search")) $("results").hidden = true; });
