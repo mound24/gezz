@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Занятость квартир</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Onest:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: toolbar over a scrolling timeline. Rows are apartments, columns are days of one month.
+   Bookings are bars that start at midday of check-in and end at midday of check-out, so a same-day turnover touches. */
+:root {
+  --bg: #edf0f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --fg: #16212c;
+  --muted: #5a6877;
+  --line: #d5dce5;
+  --line-soft: #e6ebf1;
+  --accent: #0e6b8a;
+  --accent-fg: #ffffff;
+  --accent-soft: #dcecf2;
+  --weekend: #f0f3f7;
+  --paid: #17784d;
+  --prepaid: #a46a08;
+  --unpaid: #b43d33;
+  --danger: #b43d33;
+  --shadow: 0 10px 30px rgba(18, 32, 46, .18);
+  --font-body: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --cw: 36px; --rh: 44px; --nw: 136px; --hh: 46px; --bi: 5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f161d; --surface: #17212b; --surface-2: #1d2935; --fg: #e6ecf2; --muted: #9aa9b8;
+    --line: #2b3a48; --line-soft: #233140; --accent: #4db3d3; --accent-fg: #06222c; --accent-soft: #17394a;
+    --weekend: #1a2530; --paid: #1f8d5c; --prepaid: #b5780f; --unpaid: #c4483d; --danger: #ef7d72;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f161d; --surface: #17212b; --surface-2: #1d2935; --fg: #e6ecf2; --muted: #9aa9b8;
+  --line: #2b3a48; --line-soft: #233140; --accent: #4db3d3; --accent-fg: #06222c; --accent-soft: #17394a;
+  --weekend: #1a2530; --paid: #1f8d5c; --prepaid: #b5780f; --unpaid: #c4483d; --danger: #ef7d72;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 28px;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-weight: 500; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+.btn.danger.armed { background: var(--danger); color: #fff; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; display: flex; gap: 8px; align-items: baseline; }
+.stat b { font-family: var(--font-mono); font-weight: 500; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+
+.bar-tools { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; }
+.nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nav .month { min-width: 150px; text-align: center; font-weight: 600; font-size: 16px; }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-size: 18px; line-height: 1; }
+.icon-btn:hover { background: var(--surface-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12.5px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.search { position: relative; flex: 1 1 220px; max-width: 360px; }
+.search input { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+.results { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; }
+.results button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+.results button:last-child { border-bottom: 0; }
+.results button:hover { background: var(--surface-2); }
+.results small { display: block; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.results .none { padding: 10px 12px; color: var(--muted); }
+
+.hint { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); background: var(--surface); }
+.banner { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--fg); }
+
+/* timeline */
+.scroller { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-height: 74vh; }
+.tbl { width: max-content; min-width: 100%; }
+.hrow, .row { display: flex; }
+.row { border-top: 1px solid var(--line-soft); }
+.hrow { position: sticky; top: 0; z-index: 5; background: var(--surface); }
+.name { position: sticky; left: 0; z-index: 4; flex: none; width: var(--nw); background: var(--surface); border-right: 1px solid var(--line); padding: 0 10px; display: flex; align-items: center; font-size: 13px; font-weight: 500; line-height: 1.2; height: var(--rh); }
+.name span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.hrow .name { z-index: 6; height: var(--hh); color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }
+.dh { flex: none; width: var(--cw); height: var(--hh); display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line); font-size: 11px; color: var(--muted); gap: 1px; }
+.dh b { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.dh.we { background: var(--weekend); }
+.dh.today { background: var(--accent); color: var(--accent-fg); }
+.dh.today b { color: var(--accent-fg); }
+.cells { position: relative; display: flex; flex: none; }
+.cell { flex: none; width: var(--cw); height: var(--rh); border-right: 1px solid var(--line-soft); cursor: cell; }
+.cell.we { background: var(--weekend); }
+.cell.today { background: var(--accent-soft); }
+.cell:hover { background: var(--accent-soft); }
+.bk { position: absolute; top: var(--bi); height: calc(var(--rh) - 2 * var(--bi)); z-index: 2; border: 0; border-radius: 8px; padding: 0 9px; color: #fff; font-weight: 600; font-size: 12.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.bk:hover { filter: brightness(1.1); }
+.bk.paid { background: var(--paid); }
+.bk.prepaid { background: var(--prepaid); }
+.bk.unpaid { background: var(--unpaid); }
+.bk.clash { outline: 2px dashed #fff; outline-offset: -4px; }
+.bk small { font-weight: 400; opacity: .85; margin-left: 6px; font-family: var(--font-mono); font-size: 11px; }
+
+/* full-screen mode: the month is fitted to the screen, so every apartment and day is visible without scrolling */
+.only-full { display: none; }
+body.lock { overflow: hidden; }
+.wrap.full { position: fixed; inset: 0; z-index: 15; max-width: none; margin: 0; gap: 8px; background: var(--bg);
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.wrap.full .top, .wrap.full .stats, .wrap.full .hint { display: none; }
+.wrap.full .only-full { display: inline-block; }
+.wrap.full .scroller { flex: 1; min-height: 0; max-height: none; }
+.tight .dh span { display: none; }
+.tight .dh b { font-size: 11px; }
+.tight .bk small { display: none; }
+.tight .bk { padding: 0 6px; font-size: 12px; }
+.short .name { font-size: 11.5px; line-height: 1.15; }
+.short .bk { font-size: 11.5px; }
+.xs .name { font-size: 11px; line-height: 1.1; }
+.xs .name span { -webkit-line-clamp: 1; }
+.xs .bk { font-size: 11px; padding: 0 5px; }
+.wrap.full.compact { gap: 6px; padding-top: max(6px, env(safe-area-inset-top, 0px)); padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+.wrap.full.compact .legend { display: none; }
+.wrap.full.compact .btn { padding-block: 5px; }
+.wrap.full.compact .icon-btn { width: 32px; height: 32px; }
+.wrap.full.compact .search input { padding-block: 5px; }
+
+/* form sheet */
+.sheet { position: fixed; inset: 0; z-index: 40; background: rgba(8, 16, 24, .55); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.panel { width: 100%; max-width: 540px; max-height: 100%; overflow: auto; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 18px; }
+.panel h2 { margin: 0 0 14px; font-size: 18px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid2 .full { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+label input, label select, label textarea { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 9px 10px; color: var(--fg); font-size: 14px; width: 100%; min-width: 0; }
+label textarea { min-height: 76px; resize: vertical; }
+.calc { margin: 0; align-self: end; padding: 9px 0; font-family: var(--font-mono); color: var(--fg); }
+.warn { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--danger); color: var(--danger); font-size: 13px; }
+.formbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.formbtns .spacer { flex: 1; }
+.err { margin: 10px 0 0; color: var(--danger); font-size: 13px; }
+
+@media (max-width: 560px) {
+  h1 { font-size: 21px; }
+  .grid2 { grid-template-columns: 1fr; }
+  :root { --nw: 104px; }
+  .name { font-size: 12px; }
+  .scroller { max-height: 68vh; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Занятость квартир</h1>
+      <p class="sub" id="sub">Заезды, выезды и данные жильцов</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="logout" type="button">Выйти</button>
+      <button class="btn" id="addApt" type="button">+ Квартира</button>
+      <button class="btn primary" id="newBk" type="button">+ Новая бронь</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <p class="banner" id="banner" hidden></p>
+
+  <div class="bar-tools">
+    <div class="nav">
+      <button class="icon-btn" id="prev" type="button" aria-label="Предыдущий месяц">‹</button>
+      <div class="month" id="month"></div>
+      <button class="icon-btn" id="next" type="button" aria-label="Следующий месяц">›</button>
+      <button class="btn" id="today" type="button">Сегодня</button>
+      <button class="btn" id="full" type="button">⤢ На весь экран</button>
+      <button class="btn primary only-full" id="newBk2" type="button">+ Бронь</button>
+    </div>
+    <div class="search">
+      <input id="q" type="search" placeholder="Найти жильца, телефон или квартиру" autocomplete="off">
+      <div class="results" id="results" hidden></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--paid)"></i>Оплачено</span>
+    <span><i style="background:var(--prepaid)"></i>Предоплата</span>
+    <span><i style="background:var(--unpaid)"></i>Не оплачено</span>
+  </div>
+
+  <p class="hint" id="empty" hidden>Броней пока нет. Нажмите на пустую ячейку в строке нужной квартиры или кнопку «Новая бронь».</p>
+
+  <div class="scroller" id="scroller"><div class="tbl" id="tbl"></div></div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <form class="panel" id="form" novalidate>
+    <h2 id="formTitle">Новая бронь</h2>
+    <div class="grid2">
+      <label class="full">Квартира
+        <select id="f-apt"></select>
+      </label>
+      <label class="full">Имя жильца
+        <input id="f-guest" type="text" autocomplete="off">
+      </label>
+      <label>Заезд
+        <input id="f-in" type="date">
+      </label>
+      <label>Выезд
+        <input id="f-out" type="date">
+      </label>
+      <p class="calc" id="f-nights"></p>
+      <label>Гостей
+        <input id="f-people" type="number" min="1" inputmode="numeric">
+      </label>
+      <label>Телефон
+        <input id="f-phone" type="text" inputmode="tel" autocomplete="off">
+      </label>
+      <label>Откуда бронь
+        <select id="f-source">
+          <option value="">Не указано</option>
+          <option>Booking</option>
+          <option>Airbnb</option>
+          <option>Напрямую</option>
+          <option>Знакомые</option>
+          <option>Другое</option>
+        </select>
+      </label>
+      <label>Сумма за проживание
+        <input id="f-price" type="number" min="0" step="any" inputmode="decimal">
+      </label>
+      <label>Оплата
+        <select id="f-pay">
+          <option value="unpaid">Не оплачено</option>
+          <option value="prepaid">Предоплата</option>
+          <option value="paid">Оплачено</option>
+        </select>
+      </label>
+      <label class="full">Заметки
+        <textarea id="f-notes" placeholder="Документы, время заезда, просьбы, код двери"></textarea>
+      </label>
+    </div>
+    <p class="warn" id="clash" hidden></p>
+    <p class="err" id="ferr" hidden></p>
+    <div class="formbtns">
+      <button class="btn primary" id="save" type="submit">Сохранить</button>
+      <button class="btn" id="cancel" type="button">Отмена</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="del" type="button">Удалить</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet" id="aptSheet" hidden>
+  <form class="panel" id="aptForm" novalidate>
+    <h2>Новая квартира</h2>
+    <label>Название
+      <input id="a-name" type="text" autocomplete="off">
+    </label>
+    <p class="err" id="aerr" hidden></p>
+    <div class="formbtns">
+      <button class="btn primary" type="submit">Добавить</button>
+      <button class="btn" id="aCancel" type="button">Отмена</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet" id="pinSheet" hidden>
+  <form class="panel" id="pinForm" novalidate style="max-width:380px">
+    <h2>Вход в календарь</h2>
+    <label>PIN-код
+      <input id="p-pin" type="password" autocomplete="current-password" inputmode="text">
+    </label>
+    <p class="err" id="perr" hidden></p>
+    <div class="formbtns">
+      <button class="btn primary" type="submit">Войти</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  var DEFAULT_APTS = [
+    "Lumi", "Hard rok", "Нейфтчиляр мать моя", "Lola", "Black", "Dva brata 138", "Хатка пухатка",
+    "Желтая", "Изумруд", "Slav13 -147 fazil", "B13 fahri 58", "Fontan square ploshad", "Akva rustam 45",
+    "B1-6 -12 calil", "Bayil 8 floor", "P10", "B1-11-42 tarlan", "Slav 12 idris 135", "Bayil 9 floor", "P16"
+  ];
+  var MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+  var WD = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+  var CW = 36, RH = 44, NW = 136, HH = 46, BI = 5, full = false, nativeOn = false;
+
+  var apts = DEFAULT_APTS.slice();
+  var bookings = [];
+  var db = null;
+  var canWrite = true;
+  var editingId = null;
+  var delArmed = false;
+  var now = new Date();
+  var view = { y: now.getFullYear(), m: now.getMonth() };
+  var didScroll = false;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function dn(y, m, d) { return Math.floor(Date.UTC(y, m, d) / 864e5); }
+  function isoToDn(iso) { var p = String(iso || "").split("-"); if (p.length !== 3) return NaN; return dn(+p[0], +p[1] - 1, +p[2]); }
+  function dnToIso(n) { return new Date(n * 864e5).toISOString().slice(0, 10); }
+  function fmt(iso) { var p = String(iso).split("-"); return p[2] + "." + p[1]; }
+  function todayDn() { var t = new Date(); return dn(t.getFullYear(), t.getMonth(), t.getDate()); }
+  function nightsText(n) { var a = n % 10, b = n % 100; return n + " " + ((a === 1 && b !== 11) ? "ночь" : (a >= 2 && a <= 4 && (b < 10 || b >= 20)) ? "ночи" : "ночей"); }
+  function payLabel(p) { return p === "paid" ? "Оплачено" : p === "prepaid" ? "Предоплата" : "Не оплачено"; }
+
+  function showBanner(t) { var b = $("banner"); b.textContent = t; b.hidden = !t; }
+
+  function clashSet() {
+    var out = {};
+    var by = {};
+    bookings.forEach(function (b) { (by[b.apt] = by[b.apt] || []).push(b); });
+    Object.keys(by).forEach(function (k) {
+      var l = by[k];
+      for (var i = 0; i < l.length; i++) for (var j = i + 1; j < l.length; j++) {
+        if (isoToDn(l[i].checkin) < isoToDn(l[j].checkout) && isoToDn(l[j].checkin) < isoToDn(l[i].checkout)) { out[l[i].id] = 1; out[l[j].id] = 1; }
+      }
+    });
+    return out;
+  }
+
+  function renderStats() {
+    var t = todayDn(), occ = 0, arr = 0, dep = 0;
+    bookings.forEach(function (b) {
+      var ci = isoToDn(b.checkin), co = isoToDn(b.checkout);
+      if (ci <= t && t < co) occ++;
+      if (ci === t) arr++;
+      if (co === t) dep++;
+    });
+    $("stats").innerHTML =
+      '<div class="stat"><b>' + occ + " / " + apts.length + "</b><span>заселено сегодня</span></div>" +
+      '<div class="stat"><b>' + arr + "</b><span>заездов сегодня</span></div>" +
+      '<div class="stat"><b>' + dep + "</b><span>выездов сегодня</span></div>";
+    $("sub").textContent = "Komunal · " + apts.length + " квартир. Заезды, выезды и данные жильцов";
+  }
+
+  /* column width and row height: fixed normally, fitted to the screen in full-screen mode */
+  function fit() {
+    var dim = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+    var narrow = window.innerWidth <= 560;
+    NW = narrow ? 104 : 136;
+    if (full) {
+      var sc = $("scroller");
+      var minCW = narrow ? 20 : 24;
+      var compact = window.innerHeight < 520;
+      document.querySelector(".wrap").classList.toggle("compact", compact);
+      var rawCW = Math.floor((sc.clientWidth - NW - 2) / dim);
+      CW = Math.min(64, Math.max(minCW, rawCW));
+      HH = compact ? 34 : 40;
+      /* each row is its own height plus a 1px border; keep room for a horizontal scrollbar when the days do not fit */
+      var avail = sc.clientHeight - HH - 2 - (rawCW < minCW ? 16 : 0);
+      RH = Math.min(56, Math.max(18, Math.floor(avail / Math.max(apts.length, 1)) - 1));
+    } else {
+      document.querySelector(".wrap").classList.remove("compact");
+      CW = 36; RH = 44; HH = 46;
+    }
+    BI = RH < 26 ? 2 : RH < 34 ? 3 : 5;
+    var s = document.documentElement.style;
+    s.setProperty("--cw", CW + "px"); s.setProperty("--rh", RH + "px"); s.setProperty("--nw", NW + "px");
+    s.setProperty("--hh", HH + "px"); s.setProperty("--bi", BI + "px");
+    $("tbl").classList.toggle("tight", CW < 30);
+    $("tbl").classList.toggle("short", RH < 40);
+    $("tbl").classList.toggle("xs", RH < 26);
+  }
+
+  function setFull(on) {
+    full = on;
+    document.querySelector(".wrap").classList.toggle("full", on);
+    document.body.classList.toggle("lock", on);
+    $("full").textContent = on ? "Свернуть" : "⤢ На весь экран";
+    try {
+      if (on && document.documentElement.requestFullscreen) {
+        var p = document.documentElement.requestFullscreen();
+        if (p && p.then) p.then(function () { nativeOn = true; }, function () {});
+      } else if (!on && document.fullscreenElement) { nativeOn = false; document.exitFullscreen(); }
+    } catch (e) {}
+    didScroll = false;
+    render();
+  }
+
+  function render() {
+    fit();
+    var y = view.y, m = view.m;
+    var dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    var first = dn(y, m, 1), last = first + dim, t = todayDn(), clash = clashSet();
+    $("month").textContent = MONTHS[m] + " " + y;
+    $("empty").hidden = bookings.length > 0;
+
+    var h = '<div class="hrow"><div class="name">Квартира</div>';
+    for (var i = 0; i < dim; i++) {
+      var d = first + i, wd = new Date(d * 864e5).getUTCDay();
+      h += '<div class="dh' + (wd === 0 || wd === 6 ? " we" : "") + (d === t ? " today" : "") + '"><span>' + WD[wd] + "</span><b>" + (i + 1) + "</b></div>";
+    }
+    h += "</div>";
+
+    apts.forEach(function (name, ai) {
+      h += '<div class="row"><div class="name"><span>' + esc(name) + '</span></div><div class="cells" style="width:' + (dim * CW) + 'px">';
+      for (var i = 0; i < dim; i++) {
+        var d = first + i, wd = new Date(d * 864e5).getUTCDay();
+        h += '<div class="cell' + (wd === 0 || wd === 6 ? " we" : "") + (d === t ? " today" : "") + '" data-apt="' + ai + '" data-day="' + d + '"></div>';
+      }
+      bookings.forEach(function (b) {
+        if (b.apt !== name) return;
+        var ci = isoToDn(b.checkin), co = isoToDn(b.checkout);
+        if (isNaN(ci) || isNaN(co) || !(ci < last && co >= first)) return;
+        var left = ci >= first ? (ci - first + 0.5) * CW : 0;
+        var right = co < last ? (co - first + 0.5) * CW : dim * CW;
+        var w = Math.max(right - left, 18);
+        var tip = b.guest + " · " + fmt(b.checkin) + " – " + fmt(b.checkout) + " · " + payLabel(b.pay) + (b.phone ? " · " + b.phone : "");
+        h += '<button type="button" class="bk ' + esc(b.pay || "unpaid") + (clash[b.id] ? " clash" : "") + '" data-id="' + esc(b.id) + '" title="' + esc(tip) + '" style="left:' + left + "px;width:" + w + 'px">' +
+          esc(b.guest) + (b.people ? "<small>" + esc(b.people) + " гост.</small>" : "") + "</button>";
+      });
+      h += "</div></div>";
+    });
+    $("tbl").innerHTML = h;
+    renderStats();
+
+    if (!didScroll && y === now.getFullYear() && m === now.getMonth()) {
+      var sc = $("scroller");
+      sc.scrollLeft = Math.max(0, (t - first - 2) * CW);
+      didScroll = true;
+    }
+  }
+
+  /* ---------- booking form ---------- */
+  function fillAptSelect(sel) {
+    var s = $("f-apt");
+    s.innerHTML = apts.map(function (a) { return "<option>" + esc(a) + "</option>"; }).join("");
+    if (sel && apts.indexOf(sel) === -1) s.insertAdjacentHTML("beforeend", "<option>" + esc(sel) + "</option>");
+    if (sel) s.value = sel;
+  }
+
+  function updateCalc() {
+    var ci = isoToDn($("f-in").value), co = isoToDn($("f-out").value);
+    var n = $("f-nights"), w = $("clash");
+    if (!isNaN(ci) && !isNaN(co) && co > ci) n.textContent = nightsText(co - ci); else n.textContent = "";
+    var apt = $("f-apt").value, found = [];
+    if (!isNaN(ci) && !isNaN(co) && co > ci) {
+      bookings.forEach(function (b) {
+        if (b.id === editingId || b.apt !== apt) return;
+        if (ci < isoToDn(b.checkout) && isoToDn(b.checkin) < co) found.push(b.guest + " (" + fmt(b.checkin) + " – " + fmt(b.checkout) + ")");
+      });
+    }
+    w.hidden = !found.length;
+    if (found.length) w.textContent = "Даты пересекаются с бронью: " + found.join(", ");
+  }
+
+  function openForm(b, apt, day) {
+    editingId = b ? b.id : null;
+    delArmed = false;
+    $("del").classList.remove("armed");
+    $("del").textContent = "Удалить";
+    $("del").hidden = !b;
+    $("ferr").hidden = true;
+    $("formTitle").textContent = b ? "Бронь: " + b.guest : "Новая бронь";
+    fillAptSelect(b ? b.apt : (apt || apts[0]));
+    $("f-guest").value = b ? b.guest || "" : "";
+    $("f-in").value = b ? b.checkin : (day != null ? dnToIso(day) : dnToIso(todayDn()));
+    $("f-out").value = b ? b.checkout : (day != null ? dnToIso(day + 1) : dnToIso(todayDn() + 1));
+    $("f-people").value = b && b.people ? b.people : "";
+    $("f-phone").value = b ? b.phone || "" : "";
+    $("f-source").value = b ? b.source || "" : "";
+    $("f-price").value = b && b.price !== "" && b.price != null ? b.price : "";
+    $("f-pay").value = b ? b.pay || "unpaid" : "unpaid";
+    $("f-notes").value = b ? b.notes || "" : "";
+    var ro = !canWrite;
+    ["f-apt","f-guest","f-in","f-out","f-people","f-phone","f-source","f-price","f-pay","f-notes"].forEach(function (id) { $(id).disabled = ro; });
+    $("save").disabled = ro; $("del").disabled = ro;
+    if (ro) { $("ferr").textContent = "У вас доступ только для просмотра."; $("ferr").hidden = false; }
+    updateCalc();
+    $("sheet").hidden = false;
+    if (!ro) $("f-guest").focus();
+  }
+  function closeForm() { $("sheet").hidden = true; editingId = null; }
+
+  async function saveForm(e) {
+    e.preventDefault();
+    var ferr = $("ferr");
+    var guest = $("f-guest").value.trim();
+    var ci = isoToDn($("f-in").value), co = isoToDn($("f-out").value);
+    if (!guest) { ferr.textContent = "Укажите имя жильца."; ferr.hidden = false; return; }
+    if (isNaN(ci) || isNaN(co) || co <= ci) { ferr.textContent = "Дата выезда должна быть позже даты заезда."; ferr.hidden = false; return; }
+    var priceRaw = $("f-price").value, peopleRaw = $("f-people").value;
+    var data = {
+      apt: $("f-apt").value, guest: guest, checkin: $("f-in").value, checkout: $("f-out").value,
+      people: peopleRaw === "" ? "" : Number(peopleRaw), phone: $("f-phone").value.trim(), source: $("f-source").value,
+      price: priceRaw === "" ? "" : Number(priceRaw), pay: $("f-pay").value, notes: $("f-notes").value.trim(), updatedAt: Date.now()
+    };
+    ferr.hidden = true;
+    $("save").disabled = true;
+    try {
+      if (db) {
+        var col = db.collection("bookings");
+        await (editingId ? col.doc(editingId) : col.doc()).set(data);
+      } else {
+        var id = editingId || ("local" + Date.now());
+        data.id = id;
+        bookings = bookings.filter(function (b) { return b.id !== id; }).concat([data]);
+        render();
+      }
+      var jump = isoToDn(data.checkin);
+      var jd = new Date(jump * 864e5);
+      view = { y: jd.getUTCFullYear(), m: jd.getUTCMonth() };
+      closeForm();
+      render();
+    } catch (err) {
+      ferr.textContent = "Не удалось сохранить. Попробуйте ещё раз.";
+      ferr.hidden = false;
+    }
+    $("save").disabled = !canWrite;
+  }
+
+  async function deleteBooking() {
+    if (!editingId) return;
+    if (!delArmed) {
+      delArmed = true;
+      $("del").classList.add("armed");
+      $("del").textContent = "Нажмите ещё раз, чтобы удалить";
+      return;
+    }
+    try {
+      if (db) await db.doc("bookings/" + editingId).delete();
+      else { bookings = bookings.filter(function (b) { return b.id !== editingId; }); }
+      closeForm();
+      render();
+    } catch (err) {
+      $("ferr").textContent = "Не удалось удалить. Попробуйте ещё раз."; $("ferr").hidden = false;
+    }
+  }
+
+  /* ---------- apartments ---------- */
+  async function addApartment(e) {
+    e.preventDefault();
+    var name = $("a-name").value.trim(), er = $("aerr");
+    if (!name) { er.textContent = "Введите название."; er.hidden = false; return; }
+    if (apts.indexOf(name) !== -1) { er.textContent = "Такая квартира уже есть."; er.hidden = false; return; }
+    var next = apts.concat([name]);
+    try {
+      if (db) await db.doc("config/apartments").set({ names: next });
+      else { apts = next; render(); }
+      $("aptSheet").hidden = true;
+    } catch (err) { er.textContent = "Не удалось добавить. Попробуйте ещё раз."; er.hidden = false; }
+  }
+
+  /* ---------- search ---------- */
+  function runSearch() {
+    var q = $("q").value.trim().toLowerCase(), box = $("results");
+    if (!q) { box.hidden = true; return; }
+    var hits = bookings.filter(function (b) {
+      return (b.guest + " " + (b.phone || "") + " " + b.apt + " " + (b.notes || "")).toLowerCase().indexOf(q) !== -1;
+    }).sort(function (a, b) { return a.checkin < b.checkin ? 1 : -1; }).slice(0, 8);
+    box.innerHTML = hits.length ? hits.map(function (b) {
+      return '<button type="button" data-id="' + esc(b.id) + '">' + esc(b.guest) + "<small>" + esc(b.apt) + " · " + fmt(b.checkin) + " – " + fmt(b.checkout) + " · " + payLabel(b.pay) + "</small></button>";
+    }).join("") : '<div class="none">Ничего не найдено</div>';
+    box.hidden = false;
+  }
+
+  /* ---------- events ---------- */
+  $("tbl").addEventListener("click", function (e) {
+    var bk = e.target.closest(".bk");
+    if (bk) { var b = bookings.filter(function (x) { return x.id === bk.dataset.id; })[0]; if (b) openForm(b); return; }
+    var c = e.target.closest(".cell");
+    if (c) openForm(null, apts[+c.dataset.apt], +c.dataset.day);
+  });
+  $("results").addEventListener("click", function (e) {
+    var btn = e.target.closest("button"); if (!btn) return;
+    var b = bookings.filter(function (x) { return x.id === btn.dataset.id; })[0];
+    if (!b) return;
+    var d = new Date(isoToDn(b.checkin) * 864e5);
+    view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+    $("results").hidden = true; $("q").value = "";
+    render(); openForm(b);
+  });
+  $("q").addEventListener("input", runSearch);
+  document.addEventListener("click", function (e) { if (!e.target.closest(".search")) $("results").hidden = true; });
+  $("prev").addEventListener("click", function () { view = view.m === 0 ? { y: view.y - 1, m: 11 } : { y: view.y, m: view.m - 1 }; render(); });
+  $("next").addEventListener("click", function () { view = view.m === 11 ? { y: view.y + 1, m: 0 } : { y: view.y, m: view.m + 1 }; render(); });
+  $("today").addEventListener("click", function () {
+    var t = new Date(); view = { y: t.getFullYear(), m: t.getMonth() }; didScroll = false; render();
+  });
+  $("newBk").addEventListener("click", function () { openForm(null, null, null); });
+  $("addApt").addEventListener("click", function () {
+    $("a-name").value = ""; $("aerr").hidden = true; $("aptSheet").hidden = false; $("a-name").focus();
+  });
+  $("aCancel").addEventListener("click", function () { $("aptSheet").hidden = true; });
+  $("aptForm").addEventListener("submit", addApartment);
+  $("form").addEventListener("submit", saveForm);
+  $("cancel").addEventListener("click", closeForm);
+  $("del").addEventListener("click", deleteBooking);
+  ["f-in", "f-out", "f-apt"].forEach(function (id) { $(id).addEventListener("input", updateCalc); });
+  $("f-in").addEventListener("change", function () {
+    var ci = isoToDn($("f-in").value), co = isoToDn($("f-out").value);
+    if (!isNaN(ci) && (isNaN(co) || co <= ci)) { $("f-out").value = dnToIso(ci + 1); }
+    updateCalc();
+  });
+  $("sheet").addEventListener("mousedown", function (e) { if (e.target === $("sheet")) closeForm(); });
+  $("aptSheet").addEventListener("mousedown", function (e) { if (e.target === $("aptSheet")) $("aptSheet").hidden = true; });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (!$("sheet").hidden || !$("aptSheet").hidden) { closeForm(); $("aptSheet").hidden = true; }
+    else if (full) setFull(false);
+  });
+  $("full").addEventListener("click", function () { setFull(!full); });
+  $("newBk2").addEventListener("click", function () { openForm(null, null, null); });
+  window.addEventListener("resize", function () { if (full) render(); });
+  document.addEventListener("fullscreenchange", function () {
+    if (!document.fullscreenElement && full && nativeOn) { nativeOn = false; setFull(false); }
+  });
+
+  render();
+
+  /* ---------- storage: Netlify Function /api backed by Netlify Blobs ---------- */
+  var PIN_KEY = "komunal-pin";
+  var pin = "";
+  try { pin = localStorage.getItem(PIN_KEY) || ""; } catch (e) {}
+  var pollTimer = null;
+
+  async function api(method, path, body) {
+    var res = await fetch("/api/" + path, {
+      method: method,
+      headers: Object.assign({ "x-pin": pin }, body ? { "content-type": "application/json" } : {}),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (res.status === 401) { askPin("Неверный PIN-код."); throw new Error("unauthorized"); }
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.status === 204 ? null : res.json();
+  }
+
+  async function refresh() {
+    var data = await api("GET", "state");
+    bookings = (data.bookings || []).filter(function (o) { return o.apt && o.checkin && o.checkout; });
+    apts = Array.isArray(data.apartments) && data.apartments.length ? data.apartments.slice() : DEFAULT_APTS.slice();
+    showBanner("");
+    render();
+  }
+
+  /* same shape the page already uses: collection().doc().set(), doc(path).set()/delete() */
+  function makeDb() {
+    function docRef(path) {
+      return {
+        set: async function (data) { await api("PUT", path, data); await refresh(); },
+        delete: async function () { await api("DELETE", path); await refresh(); }
+      };
+    }
+    return {
+      collection: function (name) {
+        return { doc: function (id) { return docRef(name + "/" + (id || newId())); } };
+      },
+      doc: docRef
+    };
+  }
+  function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+  function askPin(msg) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    db = null;
+    $("perr").textContent = msg || ""; $("perr").hidden = !msg;
+    $("p-pin").value = "";
+    $("pinSheet").hidden = false;
+    $("p-pin").focus();
+  }
+
+  async function start() {
+    try {
+      await refresh();
+    } catch (e) {
+      if (e.message !== "unauthorized") showBanner("Не удалось загрузить брони. Проверьте интернет и обновите страницу.");
+      return;
+    }
+    db = makeDb();
+    $("pinSheet").hidden = true;
+    if (!pollTimer) pollTimer = setInterval(function () {
+      if (document.hidden || !$("sheet").hidden) return;
+      refresh().catch(function () {});
+    }, 20000);
+  }
+
+  $("pinForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("p-pin").value.trim();
+    if (!v) { $("perr").textContent = "Введите PIN-код."; $("perr").hidden = false; return; }
+    pin = v;
+    try { localStorage.setItem(PIN_KEY, pin); } catch (err) {}
+    start();
+  });
+  $("logout").addEventListener("click", function () {
+    pin = "";
+    try { localStorage.removeItem(PIN_KEY); } catch (err) {}
+    bookings = []; render();
+    askPin("");
+  });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && db) refresh().catch(function () {}); });
+
+  if (pin) start(); else askPin("");
+})();
+</script>
+</body>
+</html>
